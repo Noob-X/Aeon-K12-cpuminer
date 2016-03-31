@@ -58,6 +58,10 @@ Protocols socks4a and socks5h, allowing remote name resolving, are also availabl
 If no protocol is specified, the proxy is assumed to be a HTTP proxy.  
 When the --proxy option is not used, the program honors the http_proxy and all_proxy environment variables.
 
+### Solo mining
+
+Using bitmonerod v0.9.3.1 or newer, specify your url as "daemon+tcp://<host>:<port>/json_rpc"
+
 Donations
 =========
 Donations for the work done in this fork are accepted at
