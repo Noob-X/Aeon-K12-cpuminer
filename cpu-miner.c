@@ -615,17 +615,18 @@ static bool submit_upstream_work(CURL *curl, struct work *work) {
         }
     } else if (have_daemon) {
         char *noncestr;
+        time_t work_time;
         pthread_mutex_lock(&g_work_lock);
-        if (!g_work.xnonce2) {
+        if (!g_work.xnonce2 ||
+            memcmp(g_work.xnonce2, work->xnonce2, work->xnonce2_len)) {
             if (opt_debug)
                 applog(LOG_DEBUG, "DEBUG: stale work detected, discarding");
             pthread_mutex_unlock(&g_work_lock);
             return true;
         }
-        if (!memcmp(g_work.xnonce2, work->xnonce2, work->xnonce2_len)) {
-            free(g_work.xnonce2);
-            g_work.xnonce2 = NULL;
-        }
+        free(g_work.xnonce2);
+        g_work.xnonce2 = NULL;
+        work_time = g_work_time;
         pthread_mutex_unlock(&g_work_lock);
         noncestr = bin2hex(((const unsigned char*)work->data) + 39, 4);
         memcpy(work->xnonce2+78, noncestr, 8);
@@ -636,6 +637,8 @@ static bool submit_upstream_work(CURL *curl, struct work *work) {
             applog(LOG_ERR, "submit_upstream_work json_rpc_call failed");
             goto out;
         }
+        /* tell poller we found a block, get new job */
+        tq_push(thr_info[daemon_thr_id].q, (void *)work_time);
         res = json_object_get(val, "result");
         if (!res)
         {
@@ -1119,9 +1122,6 @@ static void *miner_thread(void *userdata) {
            	      : memcmp(work.data, g_work.data, 76)))
                 stratum_gen_work(&stratum, &g_work);
         } else if (have_daemon) {
-            /* daemon polls for new work every second */
-            while (time(NULL) >= g_work_time + 120)
-                sleep(1);
             pthread_mutex_lock(&g_work_lock);
         } else {
             /* obtain new work from internal workio thread */
@@ -1349,10 +1349,23 @@ static void *longpoll_thread(void *userdata) {
     return NULL ;
 }
 
+static const char getblkc[] = "{\"method\": \"getblockcount\"}";
+
+#define WALLETLEN	95
+
 static void *daemon_thread(void *userdata) {
     struct thr_info *mythr = userdata;
     CURL *curl = NULL;
     uint64_t height, prevheight = 0;
+    int newblock = 1, delay = 32;
+    struct timespec ts;
+    char getblkt[] = "{\"method\": \"getblocktemplate\", \"params\": {\"reserve_size\": 8, \"wallet_address\": "
+        "\"9xaXMreKDK7bctpHtTE9zUUTgffkRvwZJ7UvyJGAQHkvBFqUYWwhVWWendW6NAdvtB8nn883WQxtU7cpe5eyJiUxLZ741t5\"}}";
+
+    if (strlen(rpc_user) != WALLETLEN) {
+        applog(LOG_ERR, "Invalid username / wallet address");
+        goto out;
+    }
 
     curl = curl_easy_init();
     if (unlikely(!curl)) {
@@ -1360,22 +1373,27 @@ static void *daemon_thread(void *userdata) {
         goto out;
     }
 
+    memcpy(getblkt+80, rpc_user, WALLETLEN);
+
     applog(LOG_INFO, "Daemon-polling activated for %s", rpc_url);
 
     while (1) {
         json_t *val, *result = NULL, *jheight;
         int err;
 
-        char s[256];
-        snprintf(s, 256, "{\"method\": \"getblocktemplate\", \"params\": {\"wallet_address\": \"%s\", \"reserve_size\": 8}, \"id\":1}\r\n", rpc_user);
-        val = json_rpc_call(curl, rpc_url, NULL, s, &err, 0);
+        /* If we've worked on this job too long, get a new one */
+        if (time(0L) > g_work_time + 240)
+            newblock = 1;
+
+        val = json_rpc_call(curl, rpc_url, NULL, newblock ? getblkt : getblkc, &err, 0);
         if (likely(val))
             result = json_object_get(val, "result");
         if (result) {
-            jheight = json_object_get(result, "height");
-            if (jheight) {
-                height = json_integer_value(jheight);
-                if (height != prevheight) {
+            time_t qtime;
+            if (newblock) {
+                jheight = json_object_get(result, "height");
+                if (jheight) {
+                    height = json_integer_value(jheight);
                     const char *tmpl = json_string_value(json_object_get(result, "blocktemplate_blob"));
                     const char *hasher = json_string_value(json_object_get(result, "blockhashing_blob"));
                     uint64_t diff = json_integer_value(json_object_get(result, "difficulty"));
@@ -1394,10 +1412,35 @@ static void *daemon_thread(void *userdata) {
                     time(&g_work_time);
                     restart_threads();
                     pthread_mutex_unlock(&g_work_lock);
+                    // reduce polling frequency right after
+                    // a new block has been announced.
+                    newblock = 0;
+                    delay = 32;
+                }
+            } else {
+                jheight = json_object_get(result, "count");
+                if (jheight) {
+                    height = json_integer_value(jheight);
+                    if (height != prevheight) {
+                        newblock = 1;
+                        json_decref(val);
+                        continue;
+                    }
                 }
             }
             json_decref(val);
-            sleep(1);
+            clock_gettime(CLOCK_REALTIME, &ts);
+            ts.tv_sec += delay;
+again:
+            qtime = (time_t)tq_pop(mythr->q, &ts);
+            if (!qtime) {
+                /* timed out, adjust delay */
+                if (delay > 1)
+                    delay >>= 1;
+            } else if (qtime == g_work_time)
+                newblock = 1;
+            else
+                goto again;
         } else {
             if (val) {
                 result = json_object_get(val, "error");
