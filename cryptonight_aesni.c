@@ -92,9 +92,9 @@ static inline void div_sq(uint64_t *b, const uint64_t *restrict c, uint64_t *div
 	*sqrt_result = s_r;
 }
 
-void cryptonight_hash_ctx(void *restrict output, const void *restrict input, struct cryptonight_ctx *restrict ctx)
+void cryptonight_hash_ctx(void *restrict output, const void *restrict input, int inlen, struct cryptonight_ctx *restrict ctx)
 {
-	keccak((const uint8_t *)input, 76, &ctx->state.hs.b[0], 200);
+	keccak((const uint8_t *)input, inlen, &ctx->state.hs.b[0], 200);
 
 	/* Variant 2 */
 	uint64_t division_result = ctx->state.hs.w[12];

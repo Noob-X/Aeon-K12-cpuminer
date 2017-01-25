@@ -366,11 +366,11 @@ static inline void div_sq(const uint8_t *b, const uint64_t *restrict c, uint64_t
 	*sqrt_result = s_r;
 }
 
-void cryptonight_hash_ctx(void *restrict output, const void *restrict input, struct cryptonight_ctx *restrict ctx) {
+void cryptonight_hash_ctx(void *restrict output, const void *restrict input, int inlen, struct cryptonight_ctx *restrict ctx) {
     
     size_t i, j;
 	__attribute__ ((aligned(16))) __m128i expandedKey[10];
-    keccak((const uint8_t *)input, 76, &ctx->state.hs.b[0], 200);
+    keccak((const uint8_t *)input, inlen, &ctx->state.hs.b[0], 200);
     memcpy(ctx->text, ctx->state.init, INIT_SIZE_BYTE);
 
 	/* Variant 2 */
