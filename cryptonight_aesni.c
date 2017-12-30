@@ -5,6 +5,28 @@ void aesni_parallel_noxor(uint8_t *long_state, uint8_t *text, uint8_t *ExpandedK
 void aesni_parallel_xor(uint8_t *text, uint8_t *ExpandedKey, uint8_t *long_state);
 void that_fucking_loop(uint8_t a[16], uint8_t b[16], uint8_t *long_state);
 
+#if !defined(__x86_64__) || !defined(_M_X64)
+static inline void umul64wide (uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo)
+{
+	uint64_t a_lo = (uint64_t)(uint32_t)a;
+	uint64_t a_hi = a >> 32;
+	uint64_t b_lo = (uint64_t)(uint32_t)b;
+	uint64_t b_hi = b >> 32;
+
+	uint64_t p0 = a_lo * b_lo;
+	uint64_t p1 = a_lo * b_hi;
+	uint64_t p2 = a_hi * b_lo;
+	uint64_t p3 = a_hi * b_hi;
+
+	uint32_t cy = (uint32_t)(((p0 >> 32) + (uint32_t)p1 + (uint32_t)p2) >> 32);
+
+	uint64_t x = p0 + (p1 << 32) + (p2 << 32);
+	uint64_t y = p3 + (p1 >> 32) + (p2 >> 32) + cy;
+	*lo += x;
+	*hi += y;
+}
+#endif
+
 static inline void ExpandAESKey256_sub1(__m128i *tmp1, __m128i *tmp2)
 {
 	__m128i tmp4;
@@ -155,6 +177,7 @@ void cryptonight_hash_ctx(void *restrict output, const void *restrict input, str
 	b[0] = nextblock[0];
 	b[1] = nextblock[1];
 
+#if defined(__x86_64__) || defined(_M_X64)
 	{
 	  uint64_t hi, lo;
 	 // hi,lo = 64bit x 64bit multiply of c[0] and b[0]
@@ -169,6 +192,10 @@ void cryptonight_hash_ctx(void *restrict output, const void *restrict input, str
 	  a[0] += hi;
 	  a[1] += lo;
 	}
+#else
+	umul64wide(c[0], b[0], &a[0], &a[1]);
+#endif
+
 	uint64_t *dst = &ctx->long_state[c[0] & 0x1FFFF0];
 	dst[0] = a[0];
 	dst[1] = a[1];
