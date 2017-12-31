@@ -109,7 +109,7 @@ static inline void ExpandAESKey256(char *keybuf)
 
 void cryptonight_hash_ctx(void *restrict output, const void *restrict input, struct cryptonight_ctx *restrict ctx)
 {
-	keccak((const uint8_t *)input, 76, &ctx->state.hs, 200);
+	keccak((const uint8_t *)input, 76, &ctx->state.hs.b[0], 200);
     uint8_t ExpandedKey[256];
     size_t i, j;
     
@@ -196,7 +196,7 @@ void cryptonight_hash_ctx(void *restrict output, const void *restrict input, str
 	umul64wide(c[0], b[0], &a[0], &a[1]);
 #endif
 
-	uint64_t *dst = &ctx->long_state[c[0] & 0x1FFFF0];
+	uint64_t *dst = (uint64_t *)&ctx->long_state[c[0] & 0x1FFFF0];
 	dst[0] = a[0];
 	dst[1] = a[1];
 
@@ -239,6 +239,6 @@ void cryptonight_hash_ctx(void *restrict output, const void *restrict input, str
 	}
         
     memcpy(ctx->state.init, ctx->text, INIT_SIZE_BYTE);
-	keccakf(&ctx->state.hs, 24);
+	keccakf(&ctx->state.hs.w[0], 24);
     extra_hashes[ctx->state.hs.b[0] & 3](&ctx->state, 200, output);
 }
