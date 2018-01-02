@@ -88,12 +88,20 @@ typedef uint64_t        u64b_t;             /* 64-bit unsigned integer */
 #define IS_BIG_ENDIAN      4321 /* byte 0 is most significant (mc68k) */
 #define IS_LITTLE_ENDIAN   1234 /* byte 0 is least significant (i386) */
 
+#if defined(LITTLE_ENDIAN) || defined(BIG_ENDIAN)
 #if BYTE_ORDER == LITTLE_ENDIAN
 #  define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
 #endif
-
 #if BYTE_ORDER == BIG_ENDIAN
 #  define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#endif
+#else
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#  define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+#endif
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#  define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#endif
 #endif
 
 /* special handler for IA64, which may be either endianness (?)  */
