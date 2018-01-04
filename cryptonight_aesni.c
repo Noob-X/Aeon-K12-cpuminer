@@ -3,9 +3,9 @@
 #include <string.h>
 #include "mul128.h"
 
-void aesni_parallel_noxor(uint8_t *long_state, uint8_t *text, uint8_t *ExpandedKey);
-void aesni_parallel_xor(uint8_t *text, uint8_t *ExpandedKey, uint8_t *long_state);
-void that_fucking_loop(uint8_t a[16], uint8_t b[16], uint8_t *long_state);
+// void aesni_parallel_noxor(uint8_t *long_state, uint8_t *text, uint8_t *ExpandedKey);
+// void aesni_parallel_xor(uint8_t *text, uint8_t *ExpandedKey, uint8_t *long_state);
+// void that_fucking_loop(uint8_t a[16], uint8_t b[16], uint8_t *long_state);
 
 static inline void ExpandAESKey256_sub1(__m128i *tmp1, __m128i *tmp2)
 {
