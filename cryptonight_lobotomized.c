@@ -1,6 +1,7 @@
 #include "cryptonight.h"
 #include <x86intrin.h>
 #include "mul128.h"
+#include <string.h>
 
 const uint32_t TestTable1[256]  __attribute((aligned(16))) ={
     0xA56363C6,0x847C7CF8,0x997777EE,0x8D7B7BF6,0x0DF2F2FF,0xBD6B6BD6,0xB16F6FDE,0x54C5C591,
