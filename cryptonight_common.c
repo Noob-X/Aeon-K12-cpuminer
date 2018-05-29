@@ -34,9 +34,18 @@ void do_skein_hash(const void* input, size_t len, char* output) {
     skein_hash(8 * 32, input, 8 * len, (uint8_t*)output);
 }
 
-void xor_blocks_dst(const uint8_t *restrict a, const uint8_t *restrict b, uint8_t *restrict dst) {
-    ((uint64_t*) dst)[0] = ((uint64_t*) a)[0] ^ ((uint64_t*) b)[0];
-    ((uint64_t*) dst)[1] = ((uint64_t*) a)[1] ^ ((uint64_t*) b)[1];
+void xor_blocks_dst(const uint64_t *a, const uint64_t *b, uint8_t *dst)
+{
+#if __x86_64__
+	__m128i *av = (__m128i *)a;
+	__m128i *bv = (__m128i *)b;
+	__m128i *dstv = (__m128i *)dst;
+
+	*dstv = _mm_xor_si128(*av, *bv);
+#else
+	((uint64_t*) dst)[0] = a[0] ^ b[0];
+	((uint64_t*) dst)[1] = a[1] ^ b[1];
+#endif
 }
 
 void (* const extra_hashes[4])(const void *, size_t, char *) = {do_blake_hash, do_groestl_hash, do_jh_hash, do_skein_hash};
