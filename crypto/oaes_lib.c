@@ -527,11 +527,13 @@ static OAES_RET oaes_key_expand( OAES_CTX * ctx )
 	//_ctx->key->key_base = _ctx->key->data_len / OAES_RKEY_LEN; 32 / 4
 	_ctx->key->key_base = 8;
 	//_ctx->key->num_keys =  _ctx->key->key_base + OAES_ROUND_BASE; 8 + 7
-	_ctx->key->num_keys = 15;
+//	_ctx->key->num_keys = 15;
+	_ctx->key->num_keys = 10;
 					
 	//_ctx->key->exp_data_len = _ctx->key->num_keys * OAES_RKEY_LEN * OAES_COL_LEN; 15 * 4 * 4
-	_ctx->key->exp_data_len = 240;
-	
+//	_ctx->key->exp_data_len = 240;
+	_ctx->key->exp_data_len = 160;
+
 	_ctx->key->exp_data = (uint8_t *)calloc( _ctx->key->exp_data_len, sizeof( uint8_t ));
 	
 	// the first _ctx->key->data_len are a direct copy
@@ -539,7 +541,8 @@ static OAES_RET oaes_key_expand( OAES_CTX * ctx )
 
 	// apply ExpandKey algorithm for remainder
 	//for( _i = _ctx->key->key_base; _i < _ctx->key->num_keys * OAES_RKEY_LEN; _i++ )
-	for(_i = 8; _i < 60; _i++)
+//	for(_i = 8; _i < 60; _i++)
+	for(_i = 8; _i < 40; _i++)
 	{
 		uint8_t _temp[OAES_COL_LEN];
 		
@@ -548,9 +551,9 @@ static OAES_RET oaes_key_expand( OAES_CTX * ctx )
 		// transform key column
 		if( 0 == _i % 8 )
 		{
-			//oaes_word_rot_left( _temp );
+			oaes_word_rot_left( _temp );
 			
-			__asm__("rorl %1, %0" : "=r" (*((uint32_t *)_temp)) : "nI" (8), "r" (*((uint32_t *)_temp)));
+//			__asm__("rorl %1, %0" : "=r" (*((uint32_t *)_temp)) : "nI" (8), "r" (*((uint32_t *)_temp)));
 			
 			for( _j = 0; _j < OAES_COL_LEN; _j++ )
 				oaes_sub_byte( _temp + _j );
