@@ -40,11 +40,25 @@ void xor_blocks_dst(const uint64_t *a, const uint64_t *b, uint8_t *dst)
 	__m128i *av = (__m128i *)a;
 	__m128i *bv = (__m128i *)b;
 	__m128i *dstv = (__m128i *)dst;
-
-	*dstv = _mm_xor_si128(*av, *bv);
+	/* POW change */
+	__m128i temp = _mm_xor_si128(*av, *bv);
+	uint8_t pow_tmp = _mm_extract_epi8(temp, 11);
+	static const uint32_t table = 0x75310;
+	uint8_t index = (((pow_tmp >> 3) & 6) | (pow_tmp & 1)) << 1;
+	pow_tmp = pow_tmp ^ ((table >> index) & 0x30);
+	*dstv = _mm_insert_epi8(temp, pow_tmp, 11);
+	/* end of POW change */
 #else
 	((uint64_t*) dst)[0] = a[0] ^ b[0];
-	((uint64_t*) dst)[1] = a[1] ^ b[1];
+	/* POW change */
+	uint8_t temp[8];
+	((uint64_t*) temp)[0] = a[1] ^ b[1];
+	const uint8_t tmp = ((const uint8_t*)(temp))[3];
+	static const uint32_t table = 0x75310;
+	const uint8_t index = (((tmp >> 3) & 6) | (tmp & 1)) << 1;
+	((uint8_t*)(temp))[3] = tmp ^ ((table >> index) & 0x30);
+	((uint64_t*) dst)[1] = ((uint64_t*) temp)[0];
+	/* end of POW change */
 #endif
 }
 

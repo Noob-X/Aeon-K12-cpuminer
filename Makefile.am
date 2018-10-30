@@ -13,7 +13,7 @@ EXTRA_DIST	= example-cfg.json nomacro.pl
 SUBDIRS		= compat
 
 AM_CPPFLAGS	= $(PTHREAD_FLAGS) $(JANSSON_INCLUDES)
-AM_CFLAGS	= -falign-loops=16 -falign-functions=16 -falign-jumps=16 -falign-labels=16
+AM_CFLAGS	= -falign-loops=16 -falign-functions=16 -falign-jumps=16 -falign-labels=16 -msse4.2
 
 bin_PROGRAMS	= minerd
 
@@ -34,7 +34,7 @@ minerd_SOURCES	= elist.h \
 # These CFLAGS stop the lobotomized implementation from breaking
 if USE_LOBOTOMIZED_AES
 minerd_SOURCES += cryptonight_lobotomized.c crypto/oaes_lib.c
-AM_CFLAGS += -O2 -fno-strict-aliasing
+AM_CFLAGS += -O3
 else
 AM_CFLAGS += -Ofast -flto -fuse-linker-plugin -funroll-loops -fvariable-expansion-in-unroller -ftree-loop-if-convert-stores -fmerge-all-constants -fbranch-target-load-optimize2 -fsched2-use-superblocks -maes
 minerd_SOURCES += cryptonight_aesni.c

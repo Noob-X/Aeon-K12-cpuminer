@@ -16,11 +16,9 @@
 
 #pragma pack(push, 1)
 union hash_state {
-//  uint8_t b[200];
-//  uint64_t w[25];
-  uint8_t b[208];
-  uint64_t w[26];
-  __m128i v[13];
+  uint8_t b[200];
+  uint64_t w[25];
+  __m128i v[4];
 };
 #pragma pack(pop)
 
@@ -29,7 +27,6 @@ union cn_slow_hash_state {
     union hash_state hs;
     struct {
         uint8_t k[64] __attribute__((aligned(16)));
-//        uint8_t init[INIT_SIZE_BYTE];
 	__m128i init[8];
     };
 };
@@ -44,21 +41,13 @@ struct cryptonight_ctx {
     uint64_t a[AES_BLOCK_SIZE >> 3] __attribute__((aligned(16)));
     uint64_t b[AES_BLOCK_SIZE >> 3] __attribute__((aligned(16)));
     uint64_t c[AES_BLOCK_SIZE >> 3] __attribute__((aligned(16)));
+#if 1
     oaes_ctx* aes_ctx;
+#endif
 } __attribute__((__may_alias__));
 
 #else
-/*
-struct cryptonight_ctx {
-    uint64_t a[AES_BLOCK_SIZE >> 3] __attribute__((aligned(16)));
-    uint64_t b[AES_BLOCK_SIZE >> 3] __attribute__((aligned(16)));
-    uint8_t c[AES_BLOCK_SIZE] __attribute__((aligned(16)));
-    union cn_slow_hash_state state;
-//    uint8_t text[INIT_SIZE_BYTE] __attribute((aligned(16)));
-	__m128i text[8] __attribute((aligned(16)));
-    uint8_t long_state[MEMORY] __attribute((aligned(16)));
-};
-*/
+
 struct cryptonight_ctx {
 	union cn_slow_hash_state state;
 	__m128i text[8] __attribute((aligned(16)));
@@ -73,8 +62,8 @@ void do_jh_hash(const void* input, size_t len, char* output);
 void do_skein_hash(const void* input, size_t len, char* output);
 void xor_blocks_dst(const uint64_t *a, const uint64_t *b, uint8_t *dst);
 void cryptonight_hash_ctx(void* output, const void* input, struct cryptonight_ctx* ctx);
-void keccak(const uint8_t *in, int inlen, uint8_t *md, int mdlen);
-void keccakf(uint64_t st[25], int rounds);
+void keccak(const uint8_t *in, int inlen, uint8_t *md, const int mdlen);
+void keccakf(uint64_t st[25], const int rounds);
 extern void (* const extra_hashes[4])(const void *, size_t, char *);
 
 #endif
