@@ -37,7 +37,7 @@ const int keccakf_piln[24] =
 
 // update the state with given number of rounds
 
-void keccakf(uint64_t st[25], int rounds)
+void keccakf(uint64_t st[25], const int rounds)
 {
     int i, j, round;
     uint64_t t, bc[5];
@@ -88,19 +88,16 @@ void keccakf(uint64_t st[25], int rounds)
 }
 
 // compute a keccak hash (md) of given byte length from "in"
-typedef uint64_t state_t[25];
 
-void keccak(const uint8_t *in, int inlen, uint8_t *md, int mdlen)
+void keccak(const uint8_t *in, int inlen, uint8_t *md, const int mdlen)
 {
-    state_t st;
+    uint64_t st[25] = {0};
     uint8_t temp[144];
     int i, rsiz, rsizw;
 
-    rsiz = sizeof(state_t) == mdlen ? HASH_DATA_AREA : 200 - 2 * mdlen;
+    rsiz = HASH_DATA_AREA;
     rsizw = rsiz / 8;
     
-    memset(st, 0, sizeof(st));
-
     for ( ; inlen >= rsiz; inlen -= rsiz, in += rsiz) {
         for (i = 0; i < rsizw; i++)
             st[i] ^= ((uint64_t *) in)[i];
