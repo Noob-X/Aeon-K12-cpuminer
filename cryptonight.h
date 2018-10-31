@@ -18,7 +18,7 @@
 union hash_state {
   uint8_t b[200];
   uint64_t w[25];
-  __m128i v[4];
+  __m128i v[12];
 };
 #pragma pack(pop)
 
