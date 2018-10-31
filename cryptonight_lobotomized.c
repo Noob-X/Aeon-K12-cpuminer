@@ -3,7 +3,7 @@
 #include "mul128.h"
 #include <string.h>
 
-#define USE_AES_NI_KEY_EXPAND
+// #define USE_AES_NI_KEY_EXPAND
 
 const uint32_t TestTable1[256]  __attribute((aligned(16))) ={
     0xA56363C6,0x847C7CF8,0x997777EE,0x8D7B7BF6,0x0DF2F2FF,0xBD6B6BD6,0xB16F6FDE,0x54C5C591,
