@@ -434,6 +434,6 @@ void cryptonight_hash_ctx(void *restrict output, const void *restrict input, str
 #endif
 
     memcpy(ctx->state.init, ctx->text, INIT_SIZE_BYTE);
-    keccakf(&ctx->state.hs.w[0], 24);
+    keccakf(&ctx->state.hs.w[0]);
     extra_hashes[ctx->state.hs.b[0] & 3](&ctx->state, 200, output);
 }

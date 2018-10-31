@@ -6,7 +6,6 @@
 #include <string.h>
 
 #define HASH_DATA_AREA 136
-#define KECCAK_ROUNDS 24
 
 #ifndef ROTL64
 #define ROTL64(x, y) (((x) << (y)) | ((x) >> (64 - (y))))
@@ -36,14 +35,14 @@ const int keccakf_piln[24] =
     15, 23, 19, 13, 12, 2, 20, 14, 22, 9,  6,  1 
 };
 
-// update the state with given number of rounds
+// update the state with given number of rounds : 24 rounds
 
-void keccakf(uint64_t st[25], const int rounds)
+void keccakf(uint64_t st[25])
 {
     int i, j, round;
     uint64_t t, bc[5];
 
-    for (round = 0; round < rounds; ++round) {
+    for (round = 0; round < 24; ++round) {
 
         // Theta
         bc[0] = st[0] ^ st[5] ^ st[10] ^ st[15] ^ st[20];
@@ -102,7 +101,7 @@ void keccak(const uint8_t *in, int inlen, uint8_t *md, const int mdlen)
     for ( ; inlen >= rsiz; inlen -= rsiz, in += rsiz) {
         for (i = 0; i < rsizw; i++)
             st[i] ^= ((uint64_t *) in)[i];
-        keccakf(st, KECCAK_ROUNDS);
+        keccakf(st);
     }
     
     // last block and padding
@@ -114,7 +113,7 @@ void keccak(const uint8_t *in, int inlen, uint8_t *md, const int mdlen)
     for (i = 0; i < rsizw; i++)
         st[i] ^= ((uint64_t *) temp)[i];
 
-    keccakf(st, KECCAK_ROUNDS);
+    keccakf(st);
 
     memcpy(md, st, mdlen);
 }

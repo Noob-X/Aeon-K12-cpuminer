@@ -766,6 +766,6 @@ void cryptonight_hash_ctx(void *restrict output, const void *restrict input, str
 
 			ctx->state.hs.v[11] = _mm_aesenc_si128(ctx->text[7], expkey[9]);
 
-	keccakf(&ctx->state.hs.w[0], 24);
+	keccakf(&ctx->state.hs.w[0]);
     extra_hashes[ctx->state.hs.b[0] & 3](&ctx->state, 200, output);
 }
