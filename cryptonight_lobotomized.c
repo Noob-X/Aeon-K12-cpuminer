@@ -2,6 +2,7 @@
 #include <x86intrin.h>
 #include "mul128.h"
 #include <string.h>
+#include <math.h> /* for sqrt when compiling for 32bit */
 
 // #define USE_AES_NI_KEY_EXPAND
 
@@ -274,20 +275,37 @@ static inline void SubAndShiftAndMixAddRoundInPlace(uint8_t *restrict in_out, __
 	_mm_storeu_si128((__m128i *)in_out, temp2);
 }
 
-static inline void mul_sum_xor_dst(const uint64_t *a, uint64_t *c, uint8_t *dst, const uint64_t tweak1_2)
+static inline void mul_sum_xor_dst(const uint64_t *cb, uint64_t *a, uint8_t *dst, uint8_t *ptr,
+				   const uint64_t offset, const __m128i *b1, const uint64_t *bs, const uint64_t *bb)
 {
 	uint64_t hi __attribute__ ((aligned(16)));
 	uint64_t lo __attribute__ ((aligned(16)));
 
-	lo = mul128(a[0], ((uint64_t *)dst)[0], &hi) + c[1];
-	hi += c[0];
+	lo = mul128(cb[0], *bs, &hi);
 
-    c[0] = ((uint64_t*) dst)[0] ^ hi;
-    c[1] = ((uint64_t*) dst)[1] ^ lo;
+	const __m128i chunk1 = _mm_xor_si128(_mm_loadu_si128((__m128i *)((ptr) + ((offset) ^ 0x10))), _mm_set_epi64x(lo, hi));
+
+	hi ^= ((uint64_t *)((ptr) + ((offset) ^ 0x20)))[0];
+	lo ^= ((uint64_t *)((ptr) + ((offset) ^ 0x20)))[1];
+
+	const __m128i chunk2 = _mm_loadu_si128((__m128i *)((ptr) + ((offset) ^ 0x20)));
+	const __m128i chunk3 = _mm_loadu_si128((__m128i *)((ptr) + ((offset) ^ 0x30)));
+
+	const __m128i _b = _mm_loadu_si128((__m128i *)bb);
+	const __m128i _a = _mm_loadu_si128((__m128i *)a);
+
+	_mm_storeu_si128((__m128i *)((ptr) + ((offset) ^ 0x10)), _mm_add_epi64(chunk3, *b1));
+	_mm_storeu_si128((__m128i *)((ptr) + ((offset) ^ 0x20)), _mm_add_epi64(chunk1, _b));
+	_mm_storeu_si128((__m128i *)((ptr) + ((offset) ^ 0x30)), _mm_add_epi64(chunk2, _a));
+
+	hi += a[0];
+	lo += a[1];
+
+    a[0] = *bs ^ hi;
+    a[1] = ((uint64_t*) dst)[1] ^ lo;
+
     ((uint64_t *)dst)[0] = hi;
-	/* POW change */
-	((uint64_t *)dst)[1] = lo ^ tweak1_2;
-	/* end of POW change */
+    ((uint64_t *)dst)[1] = lo;
 }
 
 static inline void xor_blocks(uint8_t *restrict a, const uint8_t *restrict b)
@@ -304,6 +322,50 @@ static inline void xor_blocks(uint8_t *restrict a, const uint8_t *restrict b)
 #endif
 }
 
+static inline void shuffle_add(const uint8_t *restrict ptr, const uint64_t offset, const uint64_t *a, const uint64_t *b, const __m128i *b1)
+{
+	const __m128i _b = _mm_loadu_si128((__m128i *)b);
+	const __m128i _a = _mm_loadu_si128((__m128i *)a);
+
+	const __m128i chunk1 = _mm_loadu_si128((__m128i *)((ptr) + ((offset) ^ 0x10)));
+	const __m128i chunk2 = _mm_loadu_si128((__m128i *)((ptr) + ((offset) ^ 0x20)));
+	const __m128i chunk3 = _mm_loadu_si128((__m128i *)((ptr) + ((offset) ^ 0x30)));
+
+	_mm_storeu_si128((__m128i *)((ptr) + ((offset) ^ 0x10)), _mm_add_epi64(chunk3, *b1));
+	_mm_storeu_si128((__m128i *)((ptr) + ((offset) ^ 0x20)), _mm_add_epi64(chunk1, _b));
+	_mm_storeu_si128((__m128i *)((ptr) + ((offset) ^ 0x30)), _mm_add_epi64(chunk2, _a));
+}
+
+static inline void div_sq(const uint8_t *b, const uint64_t *restrict c, uint64_t *division_result, uint64_t *sqrt_result, uint64_t *bs)
+{
+	uint64_t d_r = *division_result;
+	uint64_t s_r = *sqrt_result;
+	uint64_t b_s = ((uint64_t *)b)[0];
+
+	b_s ^= d_r ^ (s_r << 32);
+	*bs = b_s;
+	const uint64_t dividend = c[1];
+	const uint32_t divisor = (c[0] + (uint32_t)(s_r << 1)) | 0x80000001UL;
+	d_r = ((uint32_t)(dividend / divisor)) + (((uint64_t)(dividend % divisor)) << 32);
+	*division_result = d_r;
+	const uint64_t sqrt_input = c[0] + d_r;
+
+#if __x86_64__
+	const __m128i exp_double_bias = _mm_set_epi64x(0, 1023ULL << 52);
+	__m128d x = _mm_castsi128_pd(_mm_add_epi64(_mm_cvtsi64_si128(sqrt_input >> 12), exp_double_bias));
+	x = _mm_sqrt_sd(_mm_setzero_pd(), x);
+	s_r = (uint64_t)(_mm_cvtsi128_si64(_mm_sub_epi64(_mm_castpd_si128(x), exp_double_bias))) >> 19;
+#else
+	s_r = sqrt(sqrt_input + 18446744073709551616.0) * 2.0 - 8589934592.0;
+#endif
+
+	const uint64_t s = s_r >> 1;
+	const uint64_t b_ = s_r & 1;
+	const uint64_t r2 = (uint64_t)(s) * (s + b_) + (s_r << 32);
+	s_r += ((r2 + b_ > sqrt_input) ? -1 : 0) + ((r2 + (1ULL << 32) < sqrt_input - s) ? 1 : 0);
+	*sqrt_result = s_r;
+}
+
 void cryptonight_hash_ctx(void *restrict output, const void *restrict input, struct cryptonight_ctx *restrict ctx) {
     
     size_t i, j;
@@ -311,9 +373,10 @@ void cryptonight_hash_ctx(void *restrict output, const void *restrict input, str
     keccak((const uint8_t *)input, 76, &ctx->state.hs.b[0], 200);
     memcpy(ctx->text, ctx->state.init, INIT_SIZE_BYTE);
 
-	/* POW change */
-	const uint64_t tweak1_2 = ctx->state.hs.w[24] ^ (*((const uint64_t*)NONCE_POINTER));
-	/* end of POW change */
+	/* Variant 2 */
+	uint64_t division_result = ctx->state.hs.w[12];
+	uint64_t sqrt_result = ctx->state.hs.w[13];
+	/* end of Variant 2 */
 
 #ifdef USE_AES_NI_KEY_EXPAND
 	__m128i ukey[2];
@@ -379,6 +442,10 @@ void cryptonight_hash_ctx(void *restrict output, const void *restrict input, str
 #endif
 #endif /* !USE_AES_NI_KEY_EXPAND */
 
+	/* Variant 2 */
+	__m128i dv = _mm_xor_si128(ctx->state.hs.v[4], ctx->state.hs.v[5]);
+	/* end of Variant 2 */
+
     for (i = 0; i < ITER / 4; ++i) {
         // Dependency chain: address -> read value ------+
         // written value <-+ hard function (AES or MUL) <+
@@ -386,14 +453,24 @@ void cryptonight_hash_ctx(void *restrict output, const void *restrict input, str
         //
         // Iteration 1 
         SubAndShiftAndMixAddRound((__m128i *)ctx->c, &ctx->long_state[ctx->a[0] & 0x1FFFF0], (__m128i *)ctx->a);
+	shuffle_add(ctx->long_state, (ctx->a[0] & 0x1FFFF0), ctx->a, ctx->b, &dv);
         xor_blocks_dst(ctx->c, ctx->b, &ctx->long_state[ctx->a[0] & 0x1FFFF0]);
         // Iteration 2 
-        mul_sum_xor_dst(ctx->c, ctx->a, &ctx->long_state[ctx->c[0] & 0x1FFFF0], tweak1_2);
+	uint64_t bs;
+	div_sq(&ctx->long_state[ctx->c[0] & 0x1FFFF0], ctx->c, &division_result, &sqrt_result, &bs);
+        mul_sum_xor_dst(ctx->c, ctx->a, &ctx->long_state[ctx->c[0] & 0x1FFFF0], ctx->long_state, (ctx->c[0] & 0x1FFFF0), &dv, &bs, ctx->b);
+
+	dv = _mm_loadu_si128((__m128i *)&ctx->b);
+
         // Iteration 3 
         SubAndShiftAndMixAddRound((__m128i *)ctx->b, &ctx->long_state[ctx->a[0] & 0x1FFFF0], (__m128i *)ctx->a);
+	shuffle_add(ctx->long_state, (ctx->a[0] & 0x1FFFF0), ctx->a, ctx->c, &dv);
         xor_blocks_dst(ctx->b, ctx->c, &ctx->long_state[ctx->a[0] & 0x1FFFF0]);
         // Iteration 4 
-        mul_sum_xor_dst(ctx->b, ctx->a, &ctx->long_state[ctx->b[0] & 0x1FFFF0], tweak1_2);
+	div_sq(&ctx->long_state[ctx->b[0] & 0x1FFFF0], ctx->b, &division_result, &sqrt_result, &bs);
+        mul_sum_xor_dst(ctx->b, ctx->a, &ctx->long_state[ctx->b[0] & 0x1FFFF0], ctx->long_state, (ctx->b[0] & 0x1FFFF0), &dv, &bs, ctx->c);
+
+	dv = _mm_loadu_si128((__m128i *)&ctx->c);
     }
 
     memcpy(ctx->text, ctx->state.init, INIT_SIZE_BYTE);

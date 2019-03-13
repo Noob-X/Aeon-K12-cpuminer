@@ -12,7 +12,6 @@
 #define AES_KEY_SIZE    32 /*16*/
 #define INIT_SIZE_BLK   8
 #define INIT_SIZE_BYTE (INIT_SIZE_BLK * AES_BLOCK_SIZE)	// 128
-#define NONCE_POINTER (((const uint8_t*)input)+35) // POW change
 
 #pragma pack(push, 1)
 union hash_state {

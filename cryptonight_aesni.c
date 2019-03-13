@@ -68,13 +68,38 @@ static inline void ExpandAESKey256(const __m128i *userkey, __m128i *keys)
 	keys[9] = tmp3;
 }
 
+static inline void div_sq(uint64_t *b, const uint64_t *restrict c, uint64_t *division_result, uint64_t *sqrt_result)
+{
+	uint64_t d_r = *division_result;
+	uint64_t s_r = *sqrt_result;
+
+	b[0] ^= d_r ^ (s_r << 32);
+	const uint64_t dividend = c[1];
+	const uint32_t divisor = (c[0] + (uint32_t)(s_r << 1)) | 0x80000001UL;
+	d_r = ((uint32_t)(dividend / divisor)) + (((uint64_t)(dividend % divisor)) << 32);
+	*division_result = d_r;
+	const uint64_t sqrt_input = c[0] + d_r;
+
+	const __m128i exp_double_bias = _mm_set_epi64x(0, 1023ULL << 52);
+	__m128d x = _mm_castsi128_pd(_mm_add_epi64(_mm_cvtsi64_si128(sqrt_input >> 12), exp_double_bias));
+	x = _mm_sqrt_sd(_mm_setzero_pd(), x);
+	s_r = (uint64_t)(_mm_cvtsi128_si64(_mm_sub_epi64(_mm_castpd_si128(x), exp_double_bias))) >> 19;
+
+	const uint64_t s = s_r >> 1;
+	const uint64_t b_ = s_r & 1;
+	const uint64_t r2 = (uint64_t)(s) * (s + b_) + (s_r << 32);
+	s_r += ((r2 + b_ > sqrt_input) ? -1 : 0) + ((r2 + (1ULL << 32) < sqrt_input - s) ? 1 : 0);
+	*sqrt_result = s_r;
+}
+
 void cryptonight_hash_ctx(void *restrict output, const void *restrict input, struct cryptonight_ctx *restrict ctx)
 {
 	keccak((const uint8_t *)input, 76, &ctx->state.hs.b[0], 200);
 
-	/* POW change */
-	const uint64_t tweak1_2 = ctx->state.hs.w[24] ^ (*((const uint64_t*)NONCE_POINTER));
-	/* end of POW change */
+	/* Variant 2 */
+	uint64_t division_result = ctx->state.hs.w[12];
+	uint64_t sqrt_result = ctx->state.hs.w[13];
+	/* end of Variant 2 */
 
 	size_t i;
 	__m128i ukey[2], expkey[10];
@@ -286,7 +311,7 @@ void cryptonight_hash_ctx(void *restrict output, const void *restrict input, str
 		_mm_store_si128(&(longoutput[(i >> 4) + 6]), ctx->text[6]);
 		_mm_store_si128(&(longoutput[(i >> 4) + 7]), ctx->text[7]);
     }
-#if 1
+
 	uint64_t a[2] __attribute((aligned(16)));
 	uint64_t b[2] __attribute((aligned(16)));
 
@@ -296,172 +321,192 @@ void cryptonight_hash_ctx(void *restrict output, const void *restrict input, str
 	ukey[0] = ctx->state.hs.v[2];
 	ukey[1] = ctx->state.hs.v[3];
 
+	/* Variant 2 */
+	__m128i dv = _mm_xor_si128(ctx->state.hs.v[4], ctx->state.hs.v[5]);
+	/* end of Variant 2 */
+
 	*av = _mm_xor_si128(expkey[0], ukey[0]);
-	__builtin_prefetch(&ctx->long_state[a[0] & 0x1FFFF0], 0, 1);
+	uint64_t idx_a = a[0] & 0x1FFFF0;
+	__builtin_prefetch(&ctx->long_state[idx_a - (idx_a & 63)], 0, 1);
 	*bv = _mm_xor_si128(expkey[1], ukey[1]);
 
-// start
+/* start */
 	uint64_t c[2] __attribute((aligned(16)));
 	__m128i *cv = (__m128i *)&c;
 
-	*cv = _mm_load_si128((__m128i *)&ctx->long_state[a[0] & 0x1FFFF0]);
-	*cv = _mm_aesenc_si128(*cv, *av);
+	__m128i	main_chunk = _mm_load_si128((__m128i *)&ctx->long_state[idx_a]);
+	__m128i chunk1 = _mm_load_si128((__m128i *)&ctx->long_state[idx_a ^ 0x10]);
+	__m128i chunk2 = _mm_load_si128((__m128i *)&ctx->long_state[idx_a ^ 0x20]);
+	__m128i chunk3 = _mm_load_si128((__m128i *)&ctx->long_state[idx_a ^ 0x30]);
 
-	__builtin_prefetch(&ctx->long_state[c[0] & 0x1FFFF0], 0, 1);
+	main_chunk = _mm_aesenc_si128(main_chunk, *av);
+	*cv = main_chunk;
 
-	*bv = _mm_xor_si128(*bv, *cv);
-	/* POW change */
-	uint8_t pow_tmp = _mm_extract_epi8(*bv, 11);
-	static const uint32_t table = 0x75310;
-	uint8_t index = (((pow_tmp >> 3) & 6) | (pow_tmp & 1)) << 1;
-	pow_tmp = pow_tmp ^ ((table >> index) & 0x30);
-	*bv = _mm_insert_epi8(*bv, pow_tmp, 11);
-	/* end of POW change */
-	_mm_store_si128((__m128i *)&ctx->long_state[a[0] & 0x1FFFF0], *bv);
-	*bv = _mm_load_si128((__m128i *)&ctx->long_state[c[0] & 0x1FFFF0]);
+	uint64_t idx_c = c[0] & 0x1FFFF0;
+	__builtin_prefetch(&ctx->long_state[idx_c - (idx_c & 63)], 0, 1);
+
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a], _mm_xor_si128(*bv, main_chunk));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a ^ 0x10], _mm_add_epi64(chunk3, dv));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a ^ 0x20], _mm_add_epi64(chunk1, *bv));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a ^ 0x30], _mm_add_epi64(chunk2, *av));
+
+	__m128i b_tmp = *bv;
+
+	uint64_t *dst1 = (uint64_t *)&ctx->long_state[idx_c];
+	b[0] = dst1[0];
+	b[1] = dst1[1];
+
+	/* Variant 2 */
+	div_sq(b, c, &division_result, &sqrt_result);
+	/* End of Variant 2 */
 
 	/* 64bit multiply of c[0] and b[0] */
 	uint64_t hi, lo = mul128(c[0], b[0], &hi);
 
+	/* Variant 2 */
+	chunk1 = _mm_xor_si128(_mm_load_si128((__m128i *)&ctx->long_state[idx_c ^ 0x10]), _mm_set_epi64x(lo, hi));
+
+	hi ^= ((uint64_t *)&ctx->long_state[idx_c ^ 0x20])[0];
+	lo ^= ((uint64_t *)&ctx->long_state[idx_c ^ 0x20])[1];
+
+	chunk2 = _mm_load_si128((__m128i *)&ctx->long_state[idx_c ^ 0x20]);
+	chunk3 = _mm_load_si128((__m128i *)&ctx->long_state[idx_c ^ 0x30]);
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_c ^ 0x10], _mm_add_epi64(chunk3, dv));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_c ^ 0x20], _mm_add_epi64(chunk1, b_tmp));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_c ^ 0x30], _mm_add_epi64(chunk2, *av));
+	/* end of Variant 2 */
+
 	a[0] += hi;
 	a[1] += lo;
 
-	uint64_t *dst1 = (uint64_t *)&ctx->long_state[c[0] & 0x1FFFF0];
 	dst1[0] = a[0];
-	/* POW change */
-	dst1[1] = a[1] ^ tweak1_2;
-	/* end of POW change */
+	dst1[1] = a[1];
 
 	a[0] ^= b[0];
-	__builtin_prefetch(&ctx->long_state[a[0] & 0x1FFFF0], 0, 1);
+	idx_a = a[0] & 0x1FFFF0;
+	__builtin_prefetch(&ctx->long_state[idx_a - (idx_a & 63)], 0, 1);
 	a[1] ^= b[1];
 
+	dv = b_tmp;
 	*bv = *cv;
 
-//second
+/* second */
 
-	*cv = _mm_load_si128((__m128i *)&ctx->long_state[a[0] & 0x1FFFF0]);
-	*cv = _mm_aesenc_si128(*cv, *av);
-	__builtin_prefetch(&ctx->long_state[c[0] & 0x1FFFF0], 0, 1);
+	main_chunk = _mm_load_si128((__m128i *)&ctx->long_state[idx_a]);
+	chunk1 = _mm_load_si128((__m128i *)&ctx->long_state[idx_a ^ 0x10]);
+	chunk2 = _mm_load_si128((__m128i *)&ctx->long_state[idx_a ^ 0x20]);
+	chunk3 = _mm_load_si128((__m128i *)&ctx->long_state[idx_a ^ 0x30]);
 
-	*bv = _mm_xor_si128(*bv, *cv);
-	/* POW change */
-	pow_tmp = _mm_extract_epi8(*bv, 11);
-	index = (((pow_tmp >> 3) & 6) | (pow_tmp & 1)) << 1;
-	pow_tmp = pow_tmp ^ ((table >> index) & 0x30);
-	*bv = _mm_insert_epi8(*bv, pow_tmp, 11);
-	/* end of POW change */
-	_mm_store_si128((__m128i *)&ctx->long_state[a[0] & 0x1FFFF0], *bv);
-	*bv = _mm_load_si128((__m128i *)&ctx->long_state[c[0] & 0x1FFFF0]);
+	main_chunk = _mm_aesenc_si128(main_chunk, *av);
+	*cv = main_chunk;
+
+	idx_c = c[0] & 0x1FFFF0;
+	__builtin_prefetch(&ctx->long_state[idx_c - (idx_c & 63)], 0, 1);
+
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a], _mm_xor_si128(*bv, main_chunk));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a ^ 0x10], _mm_add_epi64(chunk3, dv));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a ^ 0x20], _mm_add_epi64(chunk1, *bv));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a ^ 0x30], _mm_add_epi64(chunk2, *av));
+
+	b_tmp = *bv;
+
+	uint64_t *dst2 = (uint64_t *)&ctx->long_state[idx_c];
+	b[0] = dst2[0];
+	b[1] = dst2[1];
+
+	/* Variant 2 */
+	div_sq(b, c, &division_result, &sqrt_result);
+	/* End of Variant 2 */
 
 	/* 64bit multiply of c[0] and b[0] */
 	lo = mul128(c[0], b[0], &hi);
 
+	/* Variant 2 */
+	chunk1 = _mm_xor_si128(_mm_load_si128((__m128i *)&ctx->long_state[idx_c ^ 0x10]), _mm_set_epi64x(lo, hi));
+
+	hi ^= ((uint64_t *)&ctx->long_state[idx_c ^ 0x20])[0];
+	lo ^= ((uint64_t *)&ctx->long_state[idx_c ^ 0x20])[1];
+
+	chunk2 = _mm_load_si128((__m128i *)&ctx->long_state[idx_c ^ 0x20]);
+	chunk3 = _mm_load_si128((__m128i *)&ctx->long_state[idx_c ^ 0x30]);
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_c ^ 0x10], _mm_add_epi64(chunk3, dv));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_c ^ 0x20], _mm_add_epi64(chunk1, b_tmp));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_c ^ 0x30], _mm_add_epi64(chunk2, *av));
+	/* end of Variant 2 */
+
 	a[0] += hi;
 	a[1] += lo;
 
-	uint64_t *dst2 = (uint64_t *)&ctx->long_state[c[0] & 0x1FFFF0];
 	dst2[0] = a[0];
-	/* POW change */
-	dst2[1] = a[1] ^ tweak1_2;
-	/* end of POW change */
+	dst2[1] = a[1];
 
 	a[0] ^= b[0];
+	idx_a = a[0] & 0x1FFFF0;
 	a[1] ^= b[1];
 
+	dv = b_tmp;
 	*bv = *cv;
-
-	__builtin_prefetch(&ctx->long_state[a[0] & 0x1FFFF0], 0, 1);
+	__builtin_prefetch(&ctx->long_state[idx_a - (idx_a & 63)], 0, 1);
 
 	for(i = 2; __builtin_expect(i < 0x80000, 1); i++)
 	{
-	*cv = _mm_load_si128((__m128i *)&ctx->long_state[a[0] & 0x1FFFF0]);
-	*cv = _mm_aesenc_si128(*cv, *av);
+	main_chunk = _mm_load_si128((__m128i *)&ctx->long_state[idx_a]);
+	chunk1 = _mm_load_si128((__m128i *)&ctx->long_state[idx_a ^ 0x10]);
+	chunk2 = _mm_load_si128((__m128i *)&ctx->long_state[idx_a ^ 0x20]);
+	chunk3 = _mm_load_si128((__m128i *)&ctx->long_state[idx_a ^ 0x30]);
 
-	__builtin_prefetch(&ctx->long_state[c[0] & 0x1FFFF0], 0, 1);
+	main_chunk = _mm_aesenc_si128(main_chunk, *av);
+	*cv = main_chunk;
 
-	*bv = _mm_xor_si128(*bv, *cv);
-	/* POW change */
-	pow_tmp = _mm_extract_epi8(*bv, 11);
-	index = (((pow_tmp >> 3) & 6) | (pow_tmp & 1)) << 1;
-	pow_tmp = pow_tmp ^ ((table >> index) & 0x30);
-	*bv = _mm_insert_epi8(*bv, pow_tmp, 11);
-	/* end of POW change */
-	_mm_store_si128((__m128i *)&ctx->long_state[a[0] & 0x1FFFF0], *bv);
-	*bv = _mm_load_si128((__m128i *)&ctx->long_state[c[0] & 0x1FFFF0]);
+	idx_c = c[0] & 0x1FFFF0;
+	__builtin_prefetch(&ctx->long_state[idx_c - (idx_c & 63)], 0, 1);
+
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a], _mm_xor_si128(*bv, main_chunk));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a ^ 0x10], _mm_add_epi64(chunk3, dv));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a ^ 0x20], _mm_add_epi64(chunk1, *bv));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_a ^ 0x30], _mm_add_epi64(chunk2, *av));
+
+	b_tmp = *bv;
+
+	uint64_t *dst = (uint64_t *)&ctx->long_state[idx_c];
+	b[0] = dst[0];
+	b[1] = dst[1];
+
+	/* Variant 2 */
+	div_sq(b, c, &division_result, &sqrt_result);
+	/* End of Variant 2 */
 
 	/* 64bit multiply of c[0] and b[0] */
 	lo = mul128(c[0], b[0], &hi);
 
+	/* Variant 2 */
+	chunk1 = _mm_xor_si128(_mm_load_si128((__m128i *)&ctx->long_state[idx_c ^ 0x10]), _mm_set_epi64x(lo, hi));
+
+	hi ^= ((uint64_t *)&ctx->long_state[idx_c ^ 0x20])[0];
+	lo ^= ((uint64_t *)&ctx->long_state[idx_c ^ 0x20])[1];
+
+	chunk2 = _mm_load_si128((__m128i *)&ctx->long_state[idx_c ^ 0x20]);
+	chunk3 = _mm_load_si128((__m128i *)&ctx->long_state[idx_c ^ 0x30]);
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_c ^ 0x10], _mm_add_epi64(chunk3, dv));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_c ^ 0x20], _mm_add_epi64(chunk1, b_tmp));
+	_mm_store_si128((__m128i *)&ctx->long_state[idx_c ^ 0x30], _mm_add_epi64(chunk2, *av));
+	/* end of Variant 2 */
+
 	a[0] += hi;
 	a[1] += lo;
 
-	uint64_t *dst = (uint64_t *)&ctx->long_state[c[0] & 0x1FFFF0];
 	dst[0] = a[0];
-	/* POW change */
-	dst[1] = a[1] ^ tweak1_2;
-	/* end of POW change */
+	dst[1] = a[1];
 
 	a[0] ^= b[0];
+	idx_a = a[0] & 0x1FFFF0;
 	a[1] ^= b[1];
 
+	dv = b_tmp;
 	*bv = *cv;
-
-	__builtin_prefetch(&ctx->long_state[a[0] & 0x1FFFF0], 0, 1);
+	__builtin_prefetch(&ctx->long_state[idx_a - (idx_a & 63)], 0, 1);
 	}
-#else
 
-	ukey[0] = ctx->state.hs.v[2];
-	ukey[1] = ctx->state.hs.v[3];
-
-	__m128i av = _mm_xor_si128(expkey[0], ukey[0]);
-	__m128i bv = _mm_xor_si128(expkey[1], ukey[1]);
-
-	__attribute((aligned(16))) uint64_t a0 = _mm_cvtsi128_si64(av);
-	__attribute((aligned(16))) uint64_t idx_a = a0 & 0x1FFFF0;
-	__builtin_prefetch(&ctx->long_state[idx_a], 0, 1);
-
-	for(i = 0; __builtin_expect(i < 0x80000, 1); i++)
-	{
-	__m128i cv = _mm_load_si128((__m128i *)&ctx->long_state[idx_a]);
-	cv = _mm_aesenc_si128(cv, av);
-
-	__attribute((aligned(16))) uint64_t c0 = _mm_cvtsi128_si64(cv);
-	__attribute((aligned(16))) uint64_t idx_c = c0 & 0x1FFFF0;
-	__builtin_prefetch(&ctx->long_state[idx_c], 0, 1);
-
-	bv = _mm_xor_si128(bv, cv);
-	/* POW change */
-	uint8_t pow_tmp = _mm_extract_epi8(bv, 11);
-	static const uint32_t table = 0x75310;
-	uint8_t index = (((pow_tmp >> 3) & 6) | (pow_tmp & 1)) << 1;
-	pow_tmp = pow_tmp ^ ((table >> index) & 0x30);
-	bv = _mm_insert_epi8(bv, pow_tmp, 11);
-	/* end of POW change */
-	_mm_store_si128((__m128i *)&ctx->long_state[idx_a], bv);
-
-	bv = _mm_load_si128((__m128i *)&ctx->long_state[idx_c]);
-	__attribute((aligned(16))) uint64_t b0 = _mm_cvtsi128_si64(bv);
-
-	/* 64bit multiply of c0 and b0 */
-	__attribute((aligned(16))) uint64_t hi, lo = mul128(c0, b0, &hi);
-	av += _mm_set_epi64x(lo, hi);
-	/* POW change */
-	__attribute((aligned(16))) uint64_t pow_temp2 = _mm_extract_epi64(av, 1);
-	pow_temp2 ^= tweak1_2;
-	__m128i pow_temp_v = _mm_insert_epi64(av, pow_temp2, 1);
-	_mm_store_si128((__m128i *)&ctx->long_state[idx_c], pow_temp_v);
-	/* end of POW change */
-	av = _mm_xor_si128(av, bv);
-
-	bv = cv;
-
-	a0 = _mm_cvtsi128_si64(av);
-	idx_a = a0 & 0x1FFFF0;
-	__builtin_prefetch(&idx_a, 0, 1);
-	__builtin_prefetch(&ctx->long_state[idx_a], 0, 1);
-	}
-#endif
 	ExpandAESKey256(ukey, expkey);
     
 		ctx->text[0] = _mm_xor_si128(longoutput[0], ctx->state.hs.v[4]);
