@@ -3,6 +3,7 @@
 // A baseline Keccak (3rd round) implementation.
 
 #include <stdint.h>
+#include <string.h>
 
 #define HASH_DATA_AREA 136
 #define KECCAK_ROUNDS 24
