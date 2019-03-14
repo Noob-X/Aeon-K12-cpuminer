@@ -1,5 +1,6 @@
 #include <x86intrin.h>
 #include "cryptonight.h"
+#include <string.h>
 
 void aesni_parallel_noxor(uint8_t *long_state, uint8_t *text, uint8_t *ExpandedKey);
 void aesni_parallel_xor(uint8_t *text, uint8_t *ExpandedKey, uint8_t *long_state);
