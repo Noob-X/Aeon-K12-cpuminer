@@ -2,9 +2,9 @@
 #define __CRYPTONIGHT_H_INCLUDED
 
 #include <stddef.h>
+#include <x86intrin.h>
 #include "crypto/oaes_lib.h"
 #include "miner.h"
-#include <x86intrin.h>
 
 #define MEMORY         (1 << 21) /* 2 MiB */
 #define ITER           (1 << 20)
@@ -12,6 +12,18 @@
 #define AES_KEY_SIZE    32 /*16*/
 #define INIT_SIZE_BLK   8
 #define INIT_SIZE_BYTE (INIT_SIZE_BLK * AES_BLOCK_SIZE)	// 128
+
+#if defined(_MSC_VER)
+#define THREADV __declspec(thread)
+#else
+#define THREADV __thread
+#endif
+
+#if __x86_64__
+#define JIT 1
+#else
+#define JIT 0
+#endif
 
 #pragma pack(push, 1)
 union hash_state {
@@ -60,7 +72,7 @@ void do_groestl_hash(const void* input, size_t len, char* output);
 void do_jh_hash(const void* input, size_t len, char* output);
 void do_skein_hash(const void* input, size_t len, char* output);
 void xor_blocks_dst(const uint64_t *a, const uint64_t *b, uint8_t *dst);
-void cryptonight_hash_ctx(void* output, const void* input, int inlen, struct cryptonight_ctx* ctx);
+void cryptonight_hash_ctx(void* output, const void* input, int inlen, struct cryptonight_ctx* ctx, uint64_t height);
 void keccak(const uint8_t *in, int inlen, uint8_t *md, const int mdlen);
 void keccakf(uint64_t st[25]);
 extern void (* const extra_hashes[4])(const void *, size_t, char *);

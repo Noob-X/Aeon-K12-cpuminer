@@ -50,13 +50,17 @@ void xor_blocks_dst(const uint64_t *a, const uint64_t *b, uint8_t *dst)
 
 void (* const extra_hashes[4])(const void *, size_t, char *) = {do_blake_hash, do_groestl_hash, do_jh_hash, do_skein_hash};
 
-void cryptonight_hash(void* output, const void* input, size_t len) {
+void cryptonight_hash(void* output, const void* input, size_t len, uint64_t height)
+{
     struct cryptonight_ctx *ctx = (struct cryptonight_ctx*)malloc(sizeof(struct cryptonight_ctx));
-    cryptonight_hash_ctx(output, input, len, ctx);
+    cryptonight_hash_ctx(output, input, len, ctx, height);
     free(ctx);
 }
 
-int scanhash_cryptonight(int thr_id, uint32_t *restrict pdata, int dlen, const uint32_t *restrict ptarget, uint32_t max_nonce, unsigned long *restrict hashes_done, struct cryptonight_ctx *persistentctx) {
+int scanhash_cryptonight(int thr_id, uint32_t *restrict pdata, int dlen, const uint32_t *restrict ptarget,
+			 uint32_t max_nonce, unsigned long *restrict hashes_done,
+			 struct cryptonight_ctx *persistentctx, uint64_t height)
+{
     uint32_t *nonceptr = (uint32_t*) (((char*)pdata) + 39);
     uint32_t n = *nonceptr - 1;
     const uint32_t first_nonce = n + 1;
@@ -65,7 +69,7 @@ int scanhash_cryptonight(int thr_id, uint32_t *restrict pdata, int dlen, const u
 	
 	do {
 		*nonceptr = ++n;
-		cryptonight_hash_ctx(hash, pdata, dlen, persistentctx);
+		cryptonight_hash_ctx(hash, pdata, dlen, persistentctx, height);
 		if (unlikely(hash[3] < Htarg)) {
 			*hashes_done = n - first_nonce + 1;
 			return true;

@@ -176,6 +176,7 @@ static char *rpc2_blob = NULL;
 static int rpc2_bloblen = 0;
 static uint32_t rpc2_target = 0;
 static char *rpc2_job_id = NULL;
+static uint64_t blk_height;
 
 pthread_mutex_t applog_lock;
 static pthread_mutex_t stats_lock;
@@ -268,6 +269,7 @@ static struct option const options[] = {
 #ifdef HAVE_SYSLOG_H
         { "syslog", 0, NULL, 'S' },
 #endif
+        { "test", 0, NULL, 1002 },
         { "threads", 1, NULL, 't' },
         { "timeout", 1, NULL, 'T' },
         { "url", 1, NULL, 'o' },
@@ -439,6 +441,17 @@ bool rpc2_job_decode(const json_t *job, struct work *work) {
         rpc2_job_id = strdup(job_id);
         pthread_mutex_unlock(&rpc2_job_lock);
     }
+    tmp = json_object_get(job, "height");
+    if (!tmp) {
+        applog(LOG_ERR, "JSON invalid block height");
+        goto err_out;
+    }
+    blk_height = json_integer_value(tmp);
+    applog(LOG_INFO, "Block height is %"PRIu64"", blk_height);
+    if (!blk_height) {
+        applog(LOG_ERR, "JSON invalid block height value");
+        goto err_out;
+    }
     if(work) {
         if (!rpc2_blob) {
             applog(LOG_ERR, "Requested work before work was received");
@@ -478,6 +491,19 @@ static bool work_decode(const json_t *val, struct work *work) {
         work->data[i] = le32dec(work->data + i);
     for (i = 0; i < ARRAY_SIZE(work->target); i++)
         work->target[i] = le32dec(work->target + i);
+
+    json_t *tmp;
+    tmp = json_object_get(val, "height");
+    if (!tmp) {
+        applog(LOG_ERR, "JSON inval block height");
+        goto err_out;
+    }
+    blk_height = json_integer_value(tmp);
+    applog(LOG_INFO, "Block height is %"PRIu64"", blk_height);
+    if (!blk_height) {
+        applog(LOG_ERR, "JSON inval block height value");
+        goto err_out;
+    }
 
     return true;
 
@@ -589,7 +615,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work) {
             switch(opt_algo) {
             case ALGO_CRYPTONIGHT:
             default:
-                cryptonight_hash(hash, work->data, work->dlen);
+                cryptonight_hash(hash, work->data, work->dlen, blk_height);
             }
             char *hashhex = bin2hex(hash, 32);
             snprintf(s, JSON_BUF_LEN,
@@ -659,7 +685,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work) {
             switch(opt_algo) {
             case ALGO_CRYPTONIGHT:
             default:
-                cryptonight_hash(hash, work->data, work->dlen);
+                cryptonight_hash(hash, work->data, work->dlen, blk_height);
             }
             char *hashhex = bin2hex(hash, 32);
             snprintf(s, JSON_BUF_LEN,
@@ -1184,8 +1210,11 @@ static void *miner_thread(void *userdata) {
         gettimeofday(&tv_start, NULL );
 
         /* scan nonces for a proof-of-work hash */
+        if (blk_height)
             rc = scanhash_cryptonight(thr_id, work.data, work.dlen, work.target,
-                    max_nonce, &hashes_done, persistentctx);
+                                      max_nonce, &hashes_done, persistentctx, blk_height);
+        else
+            rc = 0;
 
         /* record scanhash elapsed time */
         gettimeofday(&tv_end, NULL );
@@ -1395,6 +1424,7 @@ static void *daemon_thread(void *userdata) {
                 jheight = json_object_get(result, "height");
                 if (jheight) {
                     height = json_integer_value(jheight);
+                    blk_height = height;
                     const char *tmpl = json_string_value(json_object_get(result, "blocktemplate_blob"));
                     const char *hasher = json_string_value(json_object_get(result, "blockhashing_blob"));
                     uint64_t diff = json_integer_value(json_object_get(result, "difficulty"));
@@ -1423,6 +1453,7 @@ static void *daemon_thread(void *userdata) {
                 jheight = json_object_get(result, "count");
                 if (jheight) {
                     height = json_integer_value(jheight);
+                    blk_height = height;
                     if (height != prevheight) {
                         newblock = 1;
                         json_decref(val);
@@ -1796,6 +1827,10 @@ static void parse_arg(int key, char *arg) {
     case 1001:
         free(opt_cert);
         opt_cert = strdup(arg);
+        break;
+    case 1002:
+        xmr_hash_test();
+        exit(0);
         break;
     case 1005:
         opt_benchmark = true;

@@ -182,10 +182,10 @@ extern int scanhash_blake(int thr_id, uint32_t *pdata, const uint32_t *ptarget,
 extern int scanhash_x11(int thr_id, uint32_t *pdata, const uint32_t *ptarget,
 	uint32_t max_nonce, unsigned long *hashes_done);
 
-extern void cryptonight_hash(void* output, const void* input, size_t input_len);
+extern void cryptonight_hash(void* output, const void* input, size_t input_len, uint64_t height);
 struct cryptonight_ctx;
 extern int scanhash_cryptonight(int thr_id, uint32_t *pdata, int dlen, const uint32_t *ptarget,
-		uint32_t max_nonce, unsigned long *hashes_done, struct cryptonight_ctx *persistentctx);
+	uint32_t max_nonce, unsigned long *hashes_done, struct cryptonight_ctx *persistentctx, uint64_t height);
 
 struct thr_info {
 	int		id;
@@ -230,6 +230,7 @@ extern int timeval_subtract(struct timeval *result, struct timeval *x,
 	struct timeval *y);
 extern bool fulltest(const uint32_t *hash, const uint32_t *target);
 extern void diff_to_target(uint32_t *target, double diff);
+extern void xmr_hash_test(void);
 
 struct work {
     uint32_t data[32];
