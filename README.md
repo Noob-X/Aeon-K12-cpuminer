@@ -1,7 +1,7 @@
-CPUMiner-Multi
-==============
+CPUMiner
+========
 
-This is a multi-threaded CPU miner, fork of [LucasJones](//github.com/lucasjones)' cpuminer-multi.
+This is a multi-threaded CPU miner, fork of [hyc](//github.com/hyc)' cpuminer-multi.
 
 #### Table of contents
 
@@ -17,7 +17,7 @@ This is a multi-threaded CPU miner, fork of [LucasJones](//github.com/lucasjones
 Algorithms
 ==========
 #### Currently supported
- * ✓ __cryptonight__ (Bytecoin [BCN], Monero)
+ * ✓ __KangarooTwelve__ (Aeon)
 
 Dependencies
 ============
@@ -26,9 +26,7 @@ Dependencies
 
 Download
 ========
-* For binary releases, see Bitcointalk thread: https://bitcointalk.org/index.php?topic=632724
-* Git tree:   https://github.com/wolf9466/cpuminer-multi
-* Clone with `git clone https://github.com/wolf9466/cpuminer-multi`
+* No binary release, user are recommended to self compile.
 
 Build
 =====
@@ -41,8 +39,8 @@ Build
  * make
 
 #### Architecture-specific notes:
- * CryptoNight works only on x86 and x86-64.
- * If you don't have AES-NI, it's slower. A lot slower, around 1/3rd the speed. This implementation is deprecated and will not be improved.
+ * This miner works only on x86 and x86-64. Feel free to port to other arch.
+ * The build system will auto detect whether your cpu is 64 or 32 bit.
 
 Usage instructions
 ==================
@@ -65,14 +63,13 @@ Using bitmonerod v0.9.3.1 or newer, specify your url as "daemon+tcp://<host>:<po
 Donations
 =========
 Donations for the work done in this fork are accepted at
-* XMR: `46sSETXrZGT8bupxdc2MAbLe3PMV9nJTRTE5uaFErXFz6ymyzVdH86KDb9TNoG4ny5QLELfopynWeBSMoT1M2Ga8RBkDqTH`
-* BTC: `1WoLFumNUvjCgaCyjFzvFrbGfDddYrKNR`
+* AEON: `WmsLqy8dcJRdafR96Nd3UZCUx83JhS3FRi4ftwZG6sxdGRNTTrrAh6zXuacpCEyZZ7ZMACcthMU3pMHbg4zZ9nqv2TQyL992U`
 
 Credits
 =======
-This faster CPUMiner-multi was forked from LucasJones', and has been developed by Wolf.
-Special thanks to Intel for helping me with the usage of the AESKEYGENASSIST instruction, which I used to replace the calls to the slow, unoptimized oaes_lib.
-Special thanks also to dga for his code with that loop - since it runs over 500,000 times per hash, it's extremely important.
+This CPUMiner-multi was forked from hyc@github. Originally it was a cryptonight miner fork developed by Wolf
+from LucasJones's miner.
+Daemon solo mining was developed by hyc@github.
 
 License
 =======

@@ -9,7 +9,6 @@
 #include <pthread.h>
 #include <jansson.h>
 #include <curl/curl.h>
-#include "cryptonight.h"
 
 #ifdef STDC_HEADERS
 # include <stdlib.h>
@@ -131,61 +130,10 @@ static inline void le32enc(void *pp, uint32_t x)
 
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 
-void sha256_init(uint32_t *state);
-void sha256_transform(uint32_t *state, const uint32_t *block, int swap);
-void sha256d(unsigned char *hash, const unsigned char *data, int len);
+extern void k12_hash(void* output, const void* input, size_t input_len);
 
-#if defined(__ARM_NEON__) || defined(__i386__) || defined(__x86_64__)
-#define HAVE_SHA256_4WAY 1
-int sha256_use_4way();
-void sha256_init_4way(uint32_t *state);
-void sha256_transform_4way(uint32_t *state, const uint32_t *block, int swap);
-#endif
-
-#if defined(__x86_64__) && defined(USE_AVX2)
-#define HAVE_SHA256_8WAY 1
-int sha256_use_8way();
-void sha256_init_8way(uint32_t *state);
-void sha256_transform_8way(uint32_t *state, const uint32_t *block, int swap);
-#endif
-
-extern int scanhash_sha256d(int thr_id, uint32_t *pdata,
-	const uint32_t *ptarget, uint32_t max_nonce, unsigned long *hashes_done);
-
-extern unsigned char *scrypt_buffer_alloc();
-extern int scanhash_scrypt(int thr_id, uint32_t *pdata,
-	unsigned char *scratchbuf, const uint32_t *ptarget,
-	uint32_t max_nonce, unsigned long *hashes_done);
-
-extern int scanhash_keccak(int thr_id, uint32_t *pdata,
-    const uint32_t *ptarget, uint32_t max_nonce, unsigned long *hashes_done);
-
-extern int scanhash_heavy(int thr_id, uint32_t *pdata, const uint32_t *ptarget,
-                          	uint32_t max_nonce, unsigned long *hashes_done);
-
-extern int scanhash_quark(int thr_id, uint32_t *pdata, const uint32_t *ptarget,
-                        	uint32_t max_nonce, unsigned long *hashes_done);
-
-extern void init_quarkhash_contexts();
-
-extern int scanhash_skein(int thr_id, uint32_t *pdata, const uint32_t *ptarget,
-       	uint32_t max_nonce, unsigned long *hashes_done);
-
-extern int scanhash_ink(int thr_id, uint32_t *pdata, const uint32_t *ptarget,
-       	uint32_t max_nonce, unsigned long *hashes_done);
-
-extern void init_blakehash_contexts();
-
-extern int scanhash_blake(int thr_id, uint32_t *pdata, const uint32_t *ptarget,
-	uint32_t max_nonce, unsigned long *hashes_done);
-
-extern int scanhash_x11(int thr_id, uint32_t *pdata, const uint32_t *ptarget,
-	uint32_t max_nonce, unsigned long *hashes_done);
-
-extern void cryptonight_hash(void* output, const void* input, size_t input_len, uint64_t height);
-struct cryptonight_ctx;
-extern int scanhash_cryptonight(int thr_id, uint32_t *pdata, int dlen, const uint32_t *ptarget,
-	uint32_t max_nonce, unsigned long *hashes_done, struct cryptonight_ctx *persistentctx, uint64_t height);
+extern int scanhash_k12(int thr_id, uint32_t *pdata, int dlen, const uint64_t *ptarget,
+	uint64_t max_nonce, uint64_t *hashes_done);
 
 struct thr_info {
 	int		id;
@@ -230,15 +178,14 @@ extern int timeval_subtract(struct timeval *result, struct timeval *x,
 	struct timeval *y);
 extern bool fulltest(const uint32_t *hash, const uint32_t *target);
 extern void diff_to_target(uint32_t *target, double diff);
-extern void xmr_hash_test(void);
+extern void algo_hash_test(void);
 
 struct work {
-    uint32_t data[32];
-    uint32_t target[8];
-
-    char *job_id;
-    size_t xnonce2_len;
-    unsigned char *xnonce2;
+	uint32_t data[32];
+	uint64_t target[8];
+	char *job_id;
+	size_t xnonce2_len;
+	unsigned char *xnonce2;
 	int dlen;
 };
 

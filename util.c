@@ -296,7 +296,8 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      int *curl_err, int flags)
 {
-	json_t *val, *err_val, *res_val;
+//	json_t *val, *err_val, *res_val;
+	json_t *val, *err_val;
 	int rc;
 	long http_rc;
 	struct data_buffer all_data = {0};
@@ -410,7 +411,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	/* JSON-RPC valid response returns a non-null 'result',
 	 * and a null 'error'. */
-	res_val = json_object_get(val, "result");
+//	res_val = json_object_get(val, "result");
 	err_val = json_object_get(val, "error");
 
 	if ((err_val && !json_is_null(err_val) && !(flags & JSON_RPC_IGNOREERR))) {
@@ -1345,42 +1346,30 @@ out:
 	return rval;
 }
 
-void xmr_hash_test(void)
+void algo_hash_test(void)
 {
-	char hash[32];
+	unsigned char hash[32];
 	uint32_t data[32];
 	int fail = 0;
-	char src[10][125] = {
-		"5468697320697320612074657374205468697320697320612074657374205468697320697320612074657374",
-		"4c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e73656374657475722061646970697363696e67",
-		"656c69742c2073656420646f20656975736d6f642074656d706f7220696e6369646964756e74207574206c61626f7265",
-		"657420646f6c6f7265206d61676e6120616c697175612e20557420656e696d206164206d696e696d2076656e69616d2c",
-		"71756973206e6f737472756420657865726369746174696f6e20756c6c616d636f206c61626f726973206e697369",
-		"757420616c697175697020657820656120636f6d6d6f646f20636f6e7365717561742e20447569732061757465",
-		"697275726520646f6c6f7220696e20726570726568656e646572697420696e20766f6c7570746174652076656c6974",
-		"657373652063696c6c756d20646f6c6f726520657520667567696174206e756c6c612070617269617475722e",
-		"4578636570746575722073696e74206f6363616563617420637570696461746174206e6f6e2070726f6964656e742c",
-		"73756e7420696e2063756c706120717569206f666669636961206465736572756e74206d6f6c6c697420616e696d20696420657374206c61626f72756d2e"
+	char src[5][53] = {
+		"6162756e64616e732063617574656c61206e6f6e206e6f636574",
+		"63617665617420656d70746f72",
+		"6578206e6968696c6f206e6968696c20666974",
+		"00",
+		"000102030405060708090a0b0c0d0e0f10"
 	};
 
-	char ref_res[10][65] = {
-		"f759588ad57e758467295443a9bd71490abff8e9dad1b95b6bf2f5d0d78387bc",
-		"5bb833deca2bdd7252a9ccd7b4ce0b6a4854515794b56c207262f7a5b9bdb566",
-		"1ee6728da60fbd8d7d55b2b1ade487a3cf52a2c3ac6f520db12c27d8921f6cab",
-		"6969fe2ddfb758438d48049f302fc2108a4fcc93e37669170e6db4b0b9b4c4cb",
-		"7f3048b4e90d0cbe7a57c0394f37338a01fae3adfdc0e5126d863a895eb04e02",
-		"1d290443a4b542af04a82f6b2494a6ee7f20f2754c58e0849032483a56e8e2ef",
-		"c43cc6567436a86afbd6aa9eaa7c276e9806830334b614b2bee23cc76634f6fd",
-		"87be2479c0c4e8edfdfaa5603e93f4265b3f8224c1c5946feb424819d18990a4",
-		"dd9d6a6d8e47465cceac0877ef889b93e7eba979557e3935d7f86dce11b070f3",
-		"75c6f2ae49a20521de97285b431e717125847fb8935ed84a61e7f8d36a2c3d8e"
+	char ref_res[5][65] = {
+		"0255a5e7c3cdd516bebe490ccfb8f70a9a636efc55208f78c4c43a66e84384a3",
+		"b349d8c57b5adc8e0ce071706cae5132f43db8cefc85b2421eabdae4faf21428",
+		"044d353b4d860be411c9d07ea593ab02b3f0eaa2bb13849d6f1c0637f1085111",
+		"2bda92450e8b147f8a7cb629e784a058efca7cf7d8218e02d345dfaa65244a1f",
+		"6bf75fa2239198db4772e36478f8e19b0f371205f6a9a93a273f51df37122888"
 	};
 
-	uint64_t test_height = 1806260;
-
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < 5; i++) {
 		size_t len = strlen(src[i]);
-		char *blob = malloc(len / 2);
+		unsigned char *blob = malloc(len / 2);
 		if (!blob) {
 			fail = 1;
 			applog(LOG_ERR, "malloc failure");
@@ -1395,7 +1384,7 @@ void xmr_hash_test(void)
 
 		memcpy(data, blob, len / 2);
 
-		cryptonight_hash(hash, data, len / 2, test_height++);
+		k12_hash(hash, data, len / 2);
 
 		char *hashhex = bin2hex(hash, 32);
 		if (!hashhex) {
@@ -1404,7 +1393,7 @@ void xmr_hash_test(void)
 			goto err_bin2hex;
 		}
 
-		printf("XMR Hash Test %d ... ", i + 1);
+		printf("AEON K12 Hash Test %d ... ", i + 1);
 
 		if (strcmp(hashhex, ref_res[i]))
 			printf("Test %d Failed\n", i + 1);

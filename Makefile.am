@@ -13,7 +13,7 @@ EXTRA_DIST	= example-cfg.json nomacro.pl
 SUBDIRS		= compat
 
 AM_CPPFLAGS	= $(PTHREAD_FLAGS) $(JANSSON_INCLUDES)
-AM_CFLAGS	= -falign-loops=16 -falign-functions=16 -falign-jumps=16 -falign-labels=16 -msse2
+AM_CFLAGS	= -falign-loops=16 -falign-functions=16 -falign-jumps=16 -falign-labels=16
 
 bin_PROGRAMS	= minerd
 
@@ -25,24 +25,22 @@ minerd_SOURCES	= elist.h \
 		  cpu-miner.c \
 		  util.c \
 		  cryptonight_common.c \
-		  crypto/c_keccak.c \
-		  crypto/c_groestl.c \
-		  crypto/c_blake256.c \
-		  crypto/c_jh.c \
-		  crypto/c_skein.c
+		  crypto/KangarooTwelve.c
 
 # These CFLAGS stop the lobotomized implementation from breaking
 if USE_LOBOTOMIZED_AES
-minerd_SOURCES += cryptonight_lobotomized.c crypto/oaes_lib.c
+minerd_SOURCES +=
 AM_CFLAGS += -O3
 else
-AM_CFLAGS += -Ofast -flto -fuse-linker-plugin -funroll-loops -fvariable-expansion-in-unroller -ftree-loop-if-convert-stores -fmerge-all-constants -fbranch-target-load-optimize2 -fsched2-use-superblocks -maes
-minerd_SOURCES += cryptonight_aesni.c
+AM_CFLAGS += -Ofast -flto -fuse-linker-plugin -funroll-loops -fvariable-expansion-in-unroller -ftree-loop-if-convert-stores -fmerge-all-constants -fbranch-target-load-optimize2 -fsched2-use-superblocks
+minerd_SOURCES +=
 endif
 
-# Use JIT for ARCH_x86_64
+# Select 64bit or 32bit Keccak implementation
 if ARCH_x86_64
-minerd_SOURCES += CryptonightR_JIT.c CryptonightR_template.S
+minerd_SOURCES += crypto/Optimized64/KeccakP-1600-opt64.c
+else
+minerd_SOURCES += crypto/Inplace32BI/KeccakP-1600-inplace32BI.c
 endif
 
 minerd_LDFLAGS	= $(AM_LDFLAGS)
