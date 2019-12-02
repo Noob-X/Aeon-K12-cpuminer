@@ -24,8 +24,7 @@ minerd_SOURCES	= elist.h \
 		  compat.h \
 		  cpu-miner.c \
 		  util.c \
-		  cryptonight_common.c \
-		  crypto/KangarooTwelve.c
+		  k12.c
 
 # These CFLAGS stop the lobotomized implementation from breaking
 if USE_LOBOTOMIZED_AES
@@ -34,13 +33,6 @@ AM_CFLAGS += -O3
 else
 AM_CFLAGS += -Ofast -flto -fuse-linker-plugin -funroll-loops -fvariable-expansion-in-unroller -ftree-loop-if-convert-stores -fmerge-all-constants -fbranch-target-load-optimize2 -fsched2-use-superblocks
 minerd_SOURCES +=
-endif
-
-# Select 64bit or 32bit Keccak implementation
-if ARCH_x86_64
-minerd_SOURCES += crypto/Optimized64/KeccakP-1600-opt64.c
-else
-minerd_SOURCES += crypto/Inplace32BI/KeccakP-1600-inplace32BI.c
 endif
 
 minerd_LDFLAGS	= $(AM_LDFLAGS)

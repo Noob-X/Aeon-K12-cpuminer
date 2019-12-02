@@ -61,7 +61,7 @@
 static inline void drop_policy(void) {
     struct sched_param param;
     param.sched_priority = 0;
-	
+
 	sched_setscheduler(0, SCHED_OTHER, &param);
 }
 
@@ -595,7 +595,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work) {
 
             case ALGO_K12:
             default:
-                k12_hash(hash, work->data, work->dlen);
+                k12_hash(hash, work->data);
             }
             char *hashhex = bin2hex(hash, 32);
             snprintf(s, JSON_BUF_LEN,
@@ -666,7 +666,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work) {
 
             case ALGO_K12:
             default:
-                k12_hash(hash, work->data, work->dlen);
+                k12_hash(hash, work->data);
             }
             char *hashhex = bin2hex(hash, 32);
             snprintf(s, JSON_BUF_LEN,
@@ -1075,7 +1075,7 @@ static void *miner_thread(void *userdata) {
 //    unsigned char *scratchbuf = NULL;
 //    char s[16];
 //    int i;
-	
+
     /* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
      * and if that fails, then SCHED_BATCH. No need for this to be an
      * error if it fails */
@@ -1086,7 +1086,7 @@ static void *miner_thread(void *userdata) {
         drop_policy();
     }
 	#endif
-	
+
     /* Cpu affinity only makes sense if the number of threads is a multiple
      * of the number of CPUs */
     /*if (num_processors > 1 && opt_n_threads % num_processors == 0) {
@@ -1223,7 +1223,7 @@ static void *miner_thread(void *userdata) {
     }
 
     out: tq_freeze(mythr->q);
-	
+
     return NULL ;
 }
 
@@ -1908,12 +1908,12 @@ int main(int argc, char *argv[]) {
 		applog(LOG_ERR, "CPU does not have AES-NI, which is required.");
 		return(0);
 	}
-	
+
 	// We already checked the max supported
 	// function, so we don't need to check
 	// this for error.
 	__get_cpuid(1, &tmp1, &tmp2, &tmp3, &tmp4);
-	
+
 	// Mask out all bits but bit 25; if it's
 	// set, we have AES-NI, if not, nope.
 	if(!(tmp3 & 0x2000000))
@@ -2016,9 +2016,9 @@ int main(int argc, char *argv[]) {
     thr_hashrates = (double *) calloc(opt_n_threads, sizeof(double));
     if (!thr_hashrates)
         return 1;
-	
+
     thr_times = (double *)calloc(opt_n_threads, sizeof(double));
-	
+
     /* init workio thread info */
     work_thr_id = opt_n_threads;
     thr = &thr_info[work_thr_id];
