@@ -1384,7 +1384,7 @@ void algo_hash_test(void)
 
 		memcpy(data, blob, len / 2);
 
-		k12_hash(hash, data);
+		k12_hash(hash, data, len / 2);
 
 		char *hashhex = bin2hex(hash, 32);
 		if (!hashhex) {

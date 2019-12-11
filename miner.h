@@ -130,7 +130,7 @@ static inline void le32enc(void *pp, uint32_t x)
 
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 
-extern void k12_hash(void* output, const void* input);
+extern void k12_hash(void* output, const void* input, int dlen);
 
 extern int scanhash_k12(int thr_id, uint32_t *pdata, int dlen, const uint64_t *ptarget,
 	uint64_t max_nonce, uint64_t *hashes_done);

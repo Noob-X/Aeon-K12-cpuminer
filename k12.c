@@ -29,6 +29,7 @@
 #include "miner.h"
 
 #include <stdint.h>
+#include <string.h>
 
 #define ROTL64(x, n)		(((x) << (n)) | ((x) >> (64 - (n))))
 
@@ -90,16 +91,16 @@ void KeccakF1600(uint64_t *st, const uint64_t RndConst)
 	st[0] ^= RndConst;
 }
 
-uint64_t k12_PoW(const void *input)
+uint64_t k12_PoW(const void *input, int dlen)
 {
 	uint64_t st[25] __attribute__((aligned(64)));
 	uint64_t tmp0, tmp3, tmp4;
 
 	memset(st, 0x00, 200);
-	memcpy(st, input, 80);
+	memcpy(st, input, dlen);
 
 	// Padding
-	((uint8_t *)st)[81] = 0x07;
+	((uint8_t *)st)[dlen + 1] = 0x07;
 	st[20] = 0x8000000000000000ULL;
 
 	for(int i = 0; i < 11; ++i) KeccakF1600(st, KeccakF1600RndConsts[i]);
@@ -115,15 +116,15 @@ uint64_t k12_PoW(const void *input)
 	return(tmp3 ^ ((~tmp4) & tmp0));
 }
 
-void k12_hash(void *output, const void *input)
+void k12_hash(void *output, const void *input, int dlen)
 {
 	uint64_t st[25] __attribute__((aligned(64)));
 
 	memset(st, 0x00, 200);
-	memcpy(st, input, 80);
+	memcpy(st, input, dlen);
 
 	// Padding
-	((uint8_t *)st)[81] = 0x07;
+	((uint8_t *)st)[dlen + 1] = 0x07;
 	st[20] = 0x8000000000000000ULL;
 
 	for(int i = 0; i < 12; ++i) KeccakF1600(st, KeccakF1600RndConsts[i]);
@@ -141,7 +142,7 @@ int scanhash_k12(int thr_id, uint32_t *restrict pdata, int dlen, const uint64_t 
 	do
 	{
 		*nonceptr = ++n;
-		uint64_t qword3 = k12_PoW(pdata);
+		uint64_t qword3 = k12_PoW(pdata, dlen);
 		if(unlikely(qword3 < Htarg))
 		{
 			*hashes_done = n - first_nonce + 1;

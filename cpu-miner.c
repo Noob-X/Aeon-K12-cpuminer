@@ -595,7 +595,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work) {
 
             case ALGO_K12:
             default:
-                k12_hash(hash, work->data);
+                k12_hash(hash, work->data, work->dlen);
             }
             char *hashhex = bin2hex(hash, 32);
             snprintf(s, JSON_BUF_LEN,
@@ -666,7 +666,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work) {
 
             case ALGO_K12:
             default:
-                k12_hash(hash, work->data);
+                k12_hash(hash, work->data, work->dlen);
             }
             char *hashhex = bin2hex(hash, 32);
             snprintf(s, JSON_BUF_LEN,
